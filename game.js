@@ -97,8 +97,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function showScreen(screen) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active', 'hidden'));
+    if (!screen) return;
     document.querySelectorAll('.screen').forEach(s => {
+        s.classList.remove('active');
+        s.classList.remove('hidden');
         if (s !== screen) s.classList.add('hidden');
     });
     screen.classList.add('active');
