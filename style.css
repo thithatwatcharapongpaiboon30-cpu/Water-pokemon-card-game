@@ -110,6 +110,80 @@ h2 {
     margin: 0 10px;
 }
 
+.btn.back-btn {
+    background: transparent;
+    border: 1px solid white;
+    color: white;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+    max-width: 300px;
+}
+
+.room-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--dark);
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.player-list {
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 10px;
+    margin: 15px 0;
+    min-height: 150px;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.player-item {
+    padding: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+    display: flex;
+    justify-content: space-between;
+}
+
+.btn.small {
+    padding: 5px 10px;
+    font-size: 0.9rem;
+}
+
+.btn.danger {
+    background: var(--danger);
+    color: white;
+    width: 100%;
+}
+
+.game-logs {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    width: 300px;
+    max-height: 150px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.7);
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.log-entry {
+    margin-bottom: 5px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 2px;
+}
+
 .game-header {
     width: 100%;
     display: flex;
@@ -292,4 +366,5 @@ h2 {
     .card-name { font-size: 0.7rem; }
     .card-effect { font-size: 0.55rem; }
     .hand { gap: 5px; }
+    .game-logs { display: none; }
 }

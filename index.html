@@ -1,13 +1,168 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tidal Trickery: Ultimate Water Pokémon Chaos</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Main Menu -->
+        <div id="main-menu" class="screen active">
+            <h1>Tidal Trickery</h1>
+            <h2>Ultimate Water Pokémon Chaos</h2>
+            <div class="menu-buttons">
+                <button id="btn-local" class="btn primary">Play Local</button>
+                <button id="btn-host" class="btn primary">Host Online Game</button>
+                <button id="btn-join" class="btn primary">Join Online Game</button>
+            </div>
+            <div id="loading-msg" class="hidden">Loading Pokémon Data...</div>
+        </div>
 
+        <!-- Local Setup Screen -->
+        <div id="local-setup-screen" class="screen hidden">
+            <h2>Local Game Setup</h2>
+            <div class="setup-container">
+                <div class="setup-group">
+                    <label>Game Mode:</label>
+                    <select id="local-game-mode">
+                        <option value="normal">Normal (Strategic)</option>
+                        <option value="chaos">Chaos (Events)</option>
+                        <option value="ultra">Ultra (Max Chaos)</option>
+                    </select>
+                </div>
+                <div class="setup-group">
+                    <label>Total Players (3-10):</label>
+                    <input type="number" id="local-total-players" min="3" max="10" value="4">
+                </div>
+                <div class="setup-group">
+                    <label>Human Players:</label>
+                    <input type="number" id="local-human-players" min="1" max="10" value="1">
+                </div>
+                <button id="start-local-btn" class="btn primary">Start Local Game</button>
+                <button class="btn back-btn">Back</button>
+            </div>
+        </div>
+
+        <!-- Host Online Screen -->
+        <div id="host-setup-screen" class="screen hidden">
+            <h2>Host Online Game</h2>
+            <div class="setup-container">
+                <div class="setup-group">
+                    <label>Your Username:</label>
+                    <input type="text" id="host-username" placeholder="Enter username">
+                </div>
+                <div class="setup-group">
+                    <label>Game Mode:</label>
+                    <select id="host-game-mode">
+                        <option value="normal">Normal (Strategic)</option>
+                        <option value="chaos">Chaos (Events)</option>
+                        <option value="ultra">Ultra (Max Chaos)</option>
+                    </select>
+                </div>
+                <button id="create-room-btn" class="btn primary">Create Room</button>
+                <button class="btn back-btn">Back</button>
+            </div>
+        </div>
+
+        <!-- Join Online Screen -->
+        <div id="join-setup-screen" class="screen hidden">
+            <h2>Join Online Game</h2>
+            <div class="setup-container">
+                <div class="setup-group">
+                    <label>Room Code:</label>
+                    <input type="text" id="join-room-code" placeholder="e.g. A7K2QP" style="text-transform: uppercase;">
+                </div>
+                <div class="setup-group">
+                    <label>Your Username:</label>
+                    <input type="text" id="join-username" placeholder="Enter username">
+                </div>
+                <button id="join-room-btn" class="btn primary">Join Room</button>
+                <button class="btn back-btn">Back</button>
+            </div>
+        </div>
+
+        <!-- Lobby Screen -->
+        <div id="lobby-screen" class="screen hidden">
+            <h2>Multiplayer Lobby</h2>
+            <div class="setup-container">
+                <div class="room-info">
+                    <h3>ROOM CODE: <span id="lobby-room-code">------</span></h3>
+                    <button id="copy-code-btn" class="btn small">Copy</button>
+                </div>
+                <p>Mode: <span id="lobby-mode"></span></p>
+                <p>Players: <span id="lobby-player-count">1</span>/10 (Min 3 to start)</p>
+                
+                <div class="player-list" id="lobby-player-list">
+                    <!-- Players listed here -->
+                </div>
+
+                <div id="host-controls" class="hidden">
+                    <div class="setup-group">
+                        <label>Add AI Players to fill:</label>
+                        <input type="number" id="lobby-ai-count" min="0" max="7" value="0">
+                    </div>
+                    <button id="start-online-btn" class="btn primary">Start Game</button>
+                </div>
+                <p id="waiting-msg">Waiting for host to start...</p>
+                <button id="leave-room-btn" class="btn danger" style="margin-top: 15px;">Leave Room</button>
+            </div>
+        </div>
+
+        <!-- Pass and Play Screen -->
+        <div id="pass-screen" class="screen hidden">
+            <h2 id="pass-msg">Pass device to Next Player</h2>
+            <button id="ready-btn" class="btn primary">I'm Ready</button>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen hidden">
+            <div class="game-header">
+                <div id="turn-indicator">Current Turn: Player 1</div>
+                <div id="event-indicator" class="hidden">Active Event: None</div>
+                <div id="deck-info">Deck: 0 | Discard: 0</div>
+            </div>
+            
+            <div class="play-area">
+                <div class="deck-pile" id="deck-pile">
+                    <div class="card back">Deck</div>
+                </div>
+                <div class="discard-pile" id="discard-pile">
+                    <!-- Top discard card -->
+                </div>
+            </div>
+            
+            <div class="players-status" id="players-status">
+                <!-- Mini status for all players -->
+            </div>
+            
+            <div class="player-hand-container">
+                <h3 id="current-player-name">Your Hand</h3>
+                <div class="hand" id="player-hand">
+                    <!-- Cards go here -->
+                </div>
+                <div class="actions">
+                    <button id="draw-btn" class="btn action">Draw Card</button>
+                    <button id="end-turn-btn" class="btn action hidden">End Turn</button>
+                </div>
+            </div>
+            
+            <div id="game-logs" class="game-logs">
+                <!-- Action logs -->
+            </div>
+        </div>
+
+        <!-- Modals -->
+        <div id="modal-overlay" class="hidden">
+            <div id="modal-content">
+                <h3 id="modal-title">Modal Title</h3>
+                <div id="modal-body"></div>
+                <button id="modal-close" class="btn hidden">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/game.js"></script>
+</body>
+</html>

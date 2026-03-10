@@ -54,9 +54,9 @@ export function generateDeck(playerCount, mode, pokemonList) {
         return true;
     });
 
-    // Ensure enough Lapras (Defuse) cards
-    const numDefuse = playerCount + 2;
-    for (let i = 0; i < numDefuse; i++) {
+    // Add a few extra Lapras cards to the deck (players get their starting Lapras separately)
+    const numExtraDefuse = 2;
+    for (let i = 0; i < numExtraDefuse; i++) {
         deck.push(createCard(CardTemplates.find(t => t.action === 'defuse'), pokemonList));
     }
 
@@ -72,10 +72,18 @@ export function generateDeck(playerCount, mode, pokemonList) {
     return deck;
 }
 
+export function getLaprasCard(pokemonList) {
+    const template = CardTemplates.find(t => t.action === 'defuse');
+    return createCard(template, pokemonList);
+}
+
 export function insertKyogres(deck, playerCount, pokemonList) {
     const numKyogre = playerCount - 1;
-    const kyogreData = pokemonList.find(p => p.name === 'kyogre') || { name: 'kyogre', id: 382 };
+    const kyogreData = pokemonList.find(p => p.name.toLowerCase() === 'kyogre') || { name: 'kyogre', id: 382 };
     
+    // Prevent duplicate insertion
+    if (deck.some(c => c.type === CardTypes.KYOGRE)) return deck;
+
     for (let i = 0; i < numKyogre; i++) {
         const kyogreCard = {
             id: generateId(),
@@ -87,12 +95,24 @@ export function insertKyogres(deck, playerCount, pokemonList) {
             sprite: getSpriteUrl(kyogreData.id),
             isShiny: Math.random() < 0.01
         };
-        // Insert randomly in the bottom 80% of the deck
-        const minIndex = Math.floor(deck.length * 0.2);
-        const insertAt = minIndex + Math.floor(Math.random() * (deck.length - minIndex));
-        deck.splice(insertAt, 0, kyogreCard);
+        const position = Math.floor(Math.random() * (deck.length + 1));
+        deck.splice(position, 0, kyogreCard);
     }
+    
+    // Safe start buffer: First 3 cards drawn (end of array) cannot be Kyogre
+    while(deck.slice(-3).some(c => c.type === CardTypes.KYOGRE)) {
+        deck = shuffleArray(deck);
+    }
+    
     return deck;
+}
+
+export function insertCardIntoDeck(deck, card, position) {
+    // position 0 means top of the deck (which is the end of the array in our implementation)
+    // position deck.length means bottom of the deck (index 0)
+    let arrayIndex = deck.length - position;
+    arrayIndex = Math.max(0, Math.min(arrayIndex, deck.length));
+    deck.splice(arrayIndex, 0, card);
 }
 
 function createCard(template, pokemonList) {

@@ -1,7 +1,8 @@
 import { fetchWaterPokemon } from './pokemonData.js';
-import { generateDeck, insertKyogres, shuffleArray, CardTypes } from './cards.js';
+import { generateDeck, insertKyogres, shuffleArray, CardTypes, getLaprasCard, insertCardIntoDeck } from './cards.js';
 import { triggerRandomEvent } from './events.js';
 import { playAITurn, aiChooseTarget, aiChooseCardToDiscard, aiChooseKyogrePlacement } from './ai.js';
+import { Network } from './network.js';
 
 let gameState = {
     players: [],
@@ -13,19 +14,40 @@ let gameState = {
     mode: 'normal',
     turnCount: 0,
     activeEvent: null,
-    pokemonList: []
+    pokemonList: [],
+    logs: [],
+    isOnline: false
 };
 
 let ui = {};
+let localPlayerName = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     ui = {
-        startScreen: document.getElementById('start-screen'),
+        mainMenu: document.getElementById('main-menu'),
+        localSetup: document.getElementById('local-setup-screen'),
+        hostSetup: document.getElementById('host-setup-screen'),
+        joinSetup: document.getElementById('join-setup-screen'),
+        lobbyScreen: document.getElementById('lobby-screen'),
         gameScreen: document.getElementById('game-screen'),
         passScreen: document.getElementById('pass-screen'),
         loadingMsg: document.getElementById('loading-msg'),
-        startBtn: document.getElementById('start-btn'),
+        
+        // Buttons
+        btnLocal: document.getElementById('btn-local'),
+        btnHost: document.getElementById('btn-host'),
+        btnJoin: document.getElementById('btn-join'),
+        backBtns: document.querySelectorAll('.back-btn'),
+        startLocalBtn: document.getElementById('start-local-btn'),
+        createRoomBtn: document.getElementById('create-room-btn'),
+        joinRoomBtn: document.getElementById('join-room-btn'),
+        startOnlineBtn: document.getElementById('start-online-btn'),
+        leaveRoomBtn: document.getElementById('leave-room-btn'),
+        copyCodeBtn: document.getElementById('copy-code-btn'),
         readyBtn: document.getElementById('ready-btn'),
+        drawBtn: document.getElementById('draw-btn'),
+        
+        // Game UI
         deckPile: document.getElementById('deck-pile'),
         discardPile: document.getElementById('discard-pile'),
         playerHand: document.getElementById('player-hand'),
@@ -33,67 +55,249 @@ document.addEventListener('DOMContentLoaded', async () => {
         turnIndicator: document.getElementById('turn-indicator'),
         eventIndicator: document.getElementById('event-indicator'),
         deckInfo: document.getElementById('deck-info'),
-        drawBtn: document.getElementById('draw-btn'),
-        endTurnBtn: document.getElementById('end-turn-btn'),
         currentPlayerName: document.getElementById('current-player-name'),
+        gameLogs: document.getElementById('game-logs'),
+        
+        // Modals
         modalOverlay: document.getElementById('modal-overlay'),
         modalTitle: document.getElementById('modal-title'),
         modalBody: document.getElementById('modal-body'),
         modalClose: document.getElementById('modal-close'),
     };
 
-    ui.startBtn.addEventListener('click', startGame);
-    ui.drawBtn.addEventListener('click', () => handleDrawClick());
-    ui.readyBtn.addEventListener('click', () => {
+    // Navigation
+    ui.btnLocal.onclick = () => showScreen(ui.localSetup);
+    ui.btnHost.onclick = () => showScreen(ui.hostSetup);
+    ui.btnJoin.onclick = () => showScreen(ui.joinSetup);
+    ui.backBtns.forEach(btn => btn.onclick = () => showScreen(ui.mainMenu));
+
+    // Actions
+    ui.startLocalBtn.onclick = startLocalGame;
+    ui.createRoomBtn.onclick = hostOnlineGame;
+    ui.joinRoomBtn.onclick = joinOnlineGame;
+    ui.startOnlineBtn.onclick = startOnlineGame;
+    ui.leaveRoomBtn.onclick = leaveOnlineRoom;
+    ui.copyCodeBtn.onclick = () => {
+        navigator.clipboard.writeText(Network.roomCode);
+        ui.copyCodeBtn.innerText = "Copied!";
+        setTimeout(() => ui.copyCodeBtn.innerText = "Copy", 2000);
+    };
+    
+    ui.drawBtn.onclick = handleDrawClick;
+    ui.readyBtn.onclick = () => {
         ui.passScreen.classList.add('hidden');
         ui.gameScreen.classList.remove('hidden');
         renderGame();
         checkAITurn();
-    });
-    ui.modalClose.addEventListener('click', closeModal);
+    };
+    ui.modalClose.onclick = closeModal;
+
+    // Preload Pokemon
+    gameState.pokemonList = await fetchWaterPokemon();
 });
 
-async function startGame() {
-    const mode = document.getElementById('game-mode').value;
-    const totalPlayers = parseInt(document.getElementById('total-players').value);
-    const humanPlayers = parseInt(document.getElementById('human-players').value);
+function showScreen(screen) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active', 'hidden'));
+    document.querySelectorAll('.screen').forEach(s => {
+        if (s !== screen) s.classList.add('hidden');
+    });
+    screen.classList.add('active');
+    screen.classList.remove('hidden');
+}
+
+function logAction(msg) {
+    gameState.logs.push(msg);
+    if (gameState.logs.length > 10) gameState.logs.shift();
+    renderLogs();
+}
+
+function renderLogs() {
+    ui.gameLogs.innerHTML = '';
+    gameState.logs.forEach(log => {
+        const el = document.createElement('div');
+        el.className = 'log-entry';
+        el.innerText = log;
+        ui.gameLogs.appendChild(el);
+    });
+    ui.gameLogs.scrollTop = ui.gameLogs.scrollHeight;
+}
+
+// --- LOCAL GAME ---
+async function startLocalGame() {
+    const mode = document.getElementById('local-game-mode').value;
+    const totalPlayers = parseInt(document.getElementById('local-total-players').value);
+    const humanPlayers = parseInt(document.getElementById('local-human-players').value);
 
     if (totalPlayers < 3 || totalPlayers > 10) return alert("Players must be between 3 and 10.");
     if (humanPlayers < 0 || humanPlayers > totalPlayers) return alert("Invalid human player count.");
 
-    ui.startBtn.classList.add('hidden');
-    ui.loadingMsg.classList.remove('hidden');
-
-    gameState.pokemonList = await fetchWaterPokemon();
+    gameState.isOnline = false;
     gameState.mode = mode;
     
-    // Initialize Players
     gameState.players = [];
     for (let i = 0; i < totalPlayers; i++) {
         gameState.players.push({
-            id: i,
+            id: `player_${i}`,
             name: i < humanPlayers ? `Player ${i + 1}` : `AI ${i + 1}`,
             isHuman: i < humanPlayers,
             hand: [],
-            isAlive: true,
-            shields: 0
+            isAlive: true
         });
     }
 
-    // Initialize Deck
-    gameState.deck = generateDeck(totalPlayers, mode, gameState.pokemonList);
+    setupDeckAndDeal();
     
-    // Deal 4 cards to each player, ensuring 1 Lapras
-    gameState.players.forEach(p => {
-        const defuseIndex = gameState.deck.findIndex(c => c.action === 'defuse');
-        if(defuseIndex > -1) {
-            p.hand.push(gameState.deck.splice(defuseIndex, 1)[0]);
+    if (gameState.players[0].isHuman && humanPlayers > 1) {
+        showPassScreen();
+    } else {
+        showScreen(ui.gameScreen);
+        renderGame();
+        checkAITurn();
+    }
+}
+
+// --- ONLINE GAME ---
+async function hostOnlineGame() {
+    const username = document.getElementById('host-username').value.trim();
+    const mode = document.getElementById('host-game-mode').value;
+    if (!username) return alert("Enter a username");
+
+    try {
+        ui.createRoomBtn.disabled = true;
+        const room = await Network.createRoom(username, mode);
+        localPlayerName = username;
+        gameState.isOnline = true;
+        enterLobby(room);
+    } catch (e) {
+        alert(e.message);
+    } finally {
+        ui.createRoomBtn.disabled = false;
+    }
+}
+
+async function joinOnlineGame() {
+    const code = document.getElementById('join-room-code').value.trim().toUpperCase();
+    const username = document.getElementById('join-username').value.trim();
+    if (!code || !username) return alert("Enter code and username");
+
+    try {
+        ui.joinRoomBtn.disabled = true;
+        const room = await Network.joinRoom(code, username);
+        localPlayerName = username;
+        gameState.isOnline = true;
+        enterLobby(room);
+    } catch (e) {
+        alert(e.message);
+    } finally {
+        ui.joinRoomBtn.disabled = false;
+    }
+}
+
+function enterLobby(room) {
+    showScreen(ui.lobbyScreen);
+    updateLobbyUI(room);
+    
+    Network.startPolling((updatedRoom) => {
+        if (!updatedRoom) return;
+        if (updatedRoom.started && !gameState.started) {
+            // Game started by host
+            Object.assign(gameState, updatedRoom);
+            showScreen(ui.gameScreen);
+            renderGame();
+            checkAITurn();
+        } else if (!updatedRoom.started) {
+            updateLobbyUI(updatedRoom);
+        } else {
+            // Game is ongoing, sync state
+            syncGameState(updatedRoom);
         }
-        for (let i = 0; i < 3; i++) p.hand.push(gameState.deck.pop());
+    });
+}
+
+function updateLobbyUI(room) {
+    document.getElementById('lobby-room-code').innerText = room.code;
+    document.getElementById('lobby-mode').innerText = room.mode;
+    document.getElementById('lobby-player-count').innerText = room.players.length;
+    
+    const list = document.getElementById('lobby-player-list');
+    list.innerHTML = '';
+    room.players.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'player-item';
+        div.innerHTML = `<span>${p.name} ${p.name === room.host ? '(Host)' : ''} ${!p.connected ? '(Offline)' : ''}</span>`;
+        if (Network.isHost && p.name !== room.host) {
+            const kickBtn = document.createElement('button');
+            kickBtn.className = 'btn small danger';
+            kickBtn.innerText = 'Kick';
+            kickBtn.onclick = () => Network.updateState('KICK_PLAYER', { targetName: p.name });
+            div.appendChild(kickBtn);
+        }
+        list.appendChild(div);
     });
 
-    // Insert Kyogres
-    gameState.deck = insertKyogres(gameState.deck, totalPlayers, gameState.pokemonList);
+    if (Network.isHost) {
+        document.getElementById('host-controls').classList.remove('hidden');
+        document.getElementById('waiting-msg').classList.add('hidden');
+        ui.startOnlineBtn.disabled = room.players.length < 3 && (room.players.length + parseInt(document.getElementById('lobby-ai-count').value)) < 3;
+    } else {
+        document.getElementById('host-controls').classList.add('hidden');
+        document.getElementById('waiting-msg').classList.remove('hidden');
+    }
+}
+
+async function startOnlineGame() {
+    const aiCount = parseInt(document.getElementById('lobby-ai-count').value) || 0;
+    const room = await Network.getState();
+    
+    gameState.players = [...room.players];
+    for (let i = 0; i < aiCount; i++) {
+        gameState.players.push({
+            id: `ai_${i}`,
+            name: `AI ${i + 1}`,
+            isHuman: false,
+            hand: [],
+            isAlive: true,
+            connected: true
+        });
+    }
+
+    gameState.mode = room.mode;
+    setupDeckAndDeal();
+    
+    await Network.updateState('START_GAME', { state: gameState });
+}
+
+async function leaveOnlineRoom() {
+    await Network.leaveRoom();
+    showScreen(ui.mainMenu);
+}
+
+function syncGameState(serverRoom) {
+    const currentPlayer = gameState.players[gameState.turnIndex];
+    if (currentPlayer && currentPlayer.name !== localPlayerName && !(!currentPlayer.isHuman && Network.isHost)) {
+        Object.assign(gameState, serverRoom);
+        renderGame();
+    }
+}
+
+async function broadcastState() {
+    if (gameState.isOnline) {
+        await Network.updateState('UPDATE_FULL_STATE', { state: gameState });
+    }
+}
+
+// --- CORE GAME LOGIC ---
+function setupDeckAndDeal() {
+    gameState.deck = generateDeck(gameState.players.length, gameState.mode, gameState.pokemonList);
+    
+    gameState.players.forEach(p => {
+        for (let i = 0; i < 3; i++) {
+            if (gameState.deck.length > 0) p.hand.push(gameState.deck.pop());
+        }
+        p.hand.push(getLaprasCard(gameState.pokemonList));
+    });
+
+    gameState.deck = insertKyogres(gameState.deck, gameState.players.length, gameState.pokemonList);
 
     gameState.turnIndex = 0;
     gameState.turnDirection = 1;
@@ -101,16 +305,8 @@ async function startGame() {
     gameState.turnCount = 0;
     gameState.activeEvent = null;
     gameState.discardPile = [];
-
-    ui.startScreen.classList.remove('active');
-    
-    if (gameState.players[0].isHuman && humanPlayers > 1) {
-        showPassScreen();
-    } else {
-        ui.gameScreen.classList.remove('hidden');
-        renderGame();
-        checkAITurn();
-    }
+    gameState.started = true;
+    gameState.logs = ["Game started!"];
 }
 
 function showPassScreen() {
@@ -132,7 +328,6 @@ function renderGame() {
         ui.eventIndicator.classList.add('hidden');
     }
 
-    // Render Players Status
     ui.playersStatus.innerHTML = '';
     gameState.players.forEach((p, i) => {
         const badge = document.createElement('div');
@@ -141,34 +336,44 @@ function renderGame() {
         ui.playersStatus.appendChild(badge);
     });
 
-    // Render Discard Pile
     ui.discardPile.innerHTML = '';
     if (gameState.discardPile.length > 0) {
         const topCard = gameState.discardPile[gameState.discardPile.length - 1];
         ui.discardPile.appendChild(createCardElement(topCard));
     }
 
-    // Render Hand
     ui.playerHand.innerHTML = '';
-    ui.currentPlayerName.innerText = `${currentPlayer.name}'s Hand`;
     
-    if (currentPlayer.isHuman) {
-        currentPlayer.hand.forEach((card, index) => {
+    let viewPlayer = currentPlayer;
+    if (gameState.isOnline) {
+        viewPlayer = gameState.players.find(p => p.name === localPlayerName);
+        if (!viewPlayer.isAlive) viewPlayer = currentPlayer; // Spectate
+    }
+
+    ui.currentPlayerName.innerText = `${viewPlayer.name}'s Hand`;
+    
+    const isMyTurn = gameState.isOnline ? (currentPlayer.name === localPlayerName) : currentPlayer.isHuman;
+
+    if (viewPlayer.isHuman && (isMyTurn || gameState.isOnline)) {
+        viewPlayer.hand.forEach((card, index) => {
             const cardEl = createCardElement(card);
-            cardEl.addEventListener('click', () => handlePlayCard(currentPlayer, card, index));
+            if (isMyTurn) {
+                cardEl.addEventListener('click', () => handlePlayCard(viewPlayer, card, index));
+            }
             ui.playerHand.appendChild(cardEl);
         });
-        ui.drawBtn.disabled = false;
+        ui.drawBtn.disabled = !isMyTurn;
     } else {
         ui.drawBtn.disabled = true;
-        // Show card backs for AI
-        currentPlayer.hand.forEach(() => {
+        viewPlayer.hand.forEach(() => {
             const cardEl = document.createElement('div');
             cardEl.className = 'card back';
             cardEl.innerText = 'Tidal';
             ui.playerHand.appendChild(cardEl);
         });
     }
+    
+    renderLogs();
 }
 
 function createCardElement(card) {
@@ -183,7 +388,6 @@ function createCardElement(card) {
 }
 
 async function handlePlayCard(player, card, index) {
-    if (!player.isHuman || gameState.players[gameState.turnIndex].id !== player.id) return;
     if (card.type === CardTypes.DEFENSE || card.type === CardTypes.KYOGRE) {
         alert("You cannot play this card directly.");
         return;
@@ -194,24 +398,27 @@ async function handlePlayCard(player, card, index) {
         return;
     }
 
-    // Remove from hand, add to discard
     player.hand.splice(index, 1);
     gameState.discardPile.push(card);
     player.cardsPlayedThisTurn = (player.cardsPlayedThisTurn || 0) + 1;
     
+    logAction(`${player.name} played ${card.name} (${card.effect})`);
+    
     renderGame();
     await resolveCardEffect(player, card);
+    await broadcastState();
     renderGame();
 }
 
 async function resolveCardEffect(player, card) {
     switch(card.action) {
         case 'peek':
-            if (player.isHuman) await showModal("Peek", gameState.deck.slice(-3).reverse());
+            if (player.isHuman && (!gameState.isOnline || player.name === localPlayerName)) 
+                await showModal("Peek", gameState.deck.slice(-3).reverse());
             break;
         case 'shuffle':
             gameState.deck = shuffleArray(gameState.deck);
-            if (player.isHuman) alert("Deck shuffled!");
+            logAction("Deck shuffled!");
             break;
         case 'skip':
             gameState.turnsRemaining--;
@@ -219,13 +426,15 @@ async function resolveCardEffect(player, card) {
             break;
         case 'attack':
             gameState.turnsRemaining--;
-            nextTurn(2); // Next player takes 2 turns
+            nextTurn(2);
             break;
         case 'reverse':
             gameState.turnDirection *= -1;
+            logAction("Turn order reversed!");
             break;
         case 'future_sight':
-            if (player.isHuman) await showModal("Future Sight", gameState.deck.slice(-5).reverse());
+            if (player.isHuman && (!gameState.isOnline || player.name === localPlayerName)) 
+                await showModal("Future Sight", gameState.deck.slice(-5).reverse());
             break;
         case 'bottom_draw':
             if (gameState.deck.length > 0) {
@@ -238,6 +447,7 @@ async function resolveCardEffect(player, card) {
             const target = await choosePlayer(player, "Choose player to attack");
             if (target) {
                 gameState.turnsRemaining--;
+                logAction(`${player.name} targeted ${target.name} with 2 turns!`);
                 setTurnToPlayer(target.id, 2);
             }
             break;
@@ -246,27 +456,23 @@ async function resolveCardEffect(player, card) {
             if (stealTarget && stealTarget.hand.length > 0) {
                 const randIdx = Math.floor(Math.random() * stealTarget.hand.length);
                 player.hand.push(stealTarget.hand.splice(randIdx, 1)[0]);
+                logAction(`${player.name} stole a card from ${stealTarget.name}`);
             }
             break;
         case 'sniper':
             const snipeTarget = await choosePlayer(player, "Choose player to discard a card");
             if (snipeTarget && snipeTarget.hand.length > 0) {
-                if (snipeTarget.isHuman) {
-                    // Simplified: random discard for now to keep flow fast
-                    const randIdx = Math.floor(Math.random() * snipeTarget.hand.length);
-                    gameState.discardPile.push(snipeTarget.hand.splice(randIdx, 1)[0]);
-                    alert(`${snipeTarget.name} discarded a card!`);
-                } else {
-                    const cardToDiscard = aiChooseCardToDiscard(snipeTarget);
-                    snipeTarget.hand = snipeTarget.hand.filter(c => c.id !== cardToDiscard.id);
-                    gameState.discardPile.push(cardToDiscard);
-                }
+                const cardToDiscard = aiChooseCardToDiscard(snipeTarget);
+                snipeTarget.hand = snipeTarget.hand.filter(c => c.id !== cardToDiscard.id);
+                gameState.discardPile.push(cardToDiscard);
+                logAction(`${snipeTarget.name} was sniped and discarded a card!`);
             }
             break;
         case 'tsunami':
             gameState.players.forEach(p => {
                 if (p.isAlive && gameState.deck.length > 0) p.hand.push(gameState.deck.pop());
             });
+            logAction("Tsunami! Everyone drew a card.");
             break;
         case 'swap_hands':
             const swapTarget = await choosePlayer(player, "Choose player to swap hands with");
@@ -274,26 +480,28 @@ async function resolveCardEffect(player, card) {
                 const temp = player.hand;
                 player.hand = swapTarget.hand;
                 swapTarget.hand = temp;
+                logAction(`${player.name} swapped hands with ${swapTarget.name}`);
             }
             break;
         case 'discard_hand':
             gameState.discardPile.push(...player.hand);
             player.hand = [];
+            logAction(`${player.name} discarded their hand!`);
             break;
         case 'rush':
             gameState.turnsRemaining += 1;
             break;
         case 'trap':
-            // Next player skips
             const nextIdx = getNextPlayerIndex();
             gameState.players[nextIdx].skipNext = true;
+            logAction(`${gameState.players[nextIdx].name} is trapped and will skip their turn!`);
             break;
     }
 }
 
 async function handleDrawClick() {
     const player = gameState.players[gameState.turnIndex];
-    if (!player.isHuman) return;
+    if (!player.isHuman || (gameState.isOnline && player.name !== localPlayerName)) return;
     await drawCard(player);
 }
 
@@ -302,6 +510,7 @@ async function drawCard(player) {
         if (gameState.discardPile.length > 0) {
             gameState.deck = shuffleArray([...gameState.discardPile]);
             gameState.discardPile = [];
+            logAction("Discard pile reshuffled into deck.");
         } else {
             alert("No cards left!");
             return;
@@ -309,6 +518,7 @@ async function drawCard(player) {
     }
 
     const card = gameState.deck.pop();
+    logAction(`${player.name} drew a card.`);
     
     if (card.type === CardTypes.KYOGRE) {
         await handleKyogre(player, card);
@@ -318,40 +528,38 @@ async function drawCard(player) {
         if (gameState.turnsRemaining <= 0) {
             nextTurn();
         } else {
+            await broadcastState();
             renderGame();
         }
     }
 }
 
 async function handleKyogre(player, kyogreCard) {
-    if (player.isHuman) {
-        alert("You drew Kyogre Catastrophe!");
-    }
+    logAction(`${player.name} drew Kyogre Catastrophe!`);
     
     const defuseIndex = player.hand.findIndex(c => c.action === 'defuse');
     if (defuseIndex > -1) {
-        // Defused
         const defuseCard = player.hand.splice(defuseIndex, 1)[0];
         gameState.discardPile.push(defuseCard);
+        logAction(`${player.name} used Lapras Rescue!`);
         
-        if (player.isHuman) {
-            alert("You used Lapras Rescue!");
-            // Simplified placement: random for now to avoid complex UI, or prompt
-            const pos = parseInt(prompt(`Place Kyogre (0 = top, ${gameState.deck.length} = bottom):`, "0"));
-            let insertPos = isNaN(pos) ? 0 : pos;
-            insertPos = Math.max(0, Math.min(gameState.deck.length, insertPos));
-            gameState.deck.splice(gameState.deck.length - insertPos, 0, kyogreCard);
+        let insertPos = 0;
+        if (player.isHuman && (!gameState.isOnline || player.name === localPlayerName)) {
+            insertPos = await showKyogrePlacementModal(gameState.deck.length);
         } else {
-            const pos = aiChooseKyogrePlacement(gameState.deck.length);
-            gameState.deck.splice(gameState.deck.length - pos, 0, kyogreCard);
+            insertPos = aiChooseKyogrePlacement(gameState.deck.length);
         }
+        
+        insertCardIntoDeck(gameState.deck, kyogreCard, insertPos);
         
         gameState.turnsRemaining--;
         if (gameState.turnsRemaining <= 0) nextTurn();
-        else renderGame();
+        else {
+            await broadcastState();
+            renderGame();
+        }
     } else {
-        // Exploded
-        if (player.isHuman) alert("You have been eliminated!");
+        logAction(`${player.name} was eliminated!`);
         player.isAlive = false;
         gameState.discardPile.push(...player.hand, kyogreCard);
         player.hand = [];
@@ -372,13 +580,14 @@ function getNextPlayerIndex() {
     return nextIdx;
 }
 
-function nextTurn(turns = 1) {
+async function nextTurn(turns = 1) {
     const currentPlayer = gameState.players[gameState.turnIndex];
     currentPlayer.cardsPlayedThisTurn = 0;
 
     gameState.turnIndex = getNextPlayerIndex();
     
     if (gameState.players[gameState.turnIndex].skipNext) {
+        logAction(`${gameState.players[gameState.turnIndex].name} skipped their turn due to trap!`);
         gameState.players[gameState.turnIndex].skipNext = false;
         gameState.turnIndex = getNextPlayerIndex();
     }
@@ -386,25 +595,26 @@ function nextTurn(turns = 1) {
     gameState.turnsRemaining = turns;
     gameState.turnCount++;
 
-    // Check Events
     const eventInterval = gameState.mode === 'chaos' ? 5 : (gameState.mode === 'ultra' ? 3 : 999);
     if (gameState.turnCount % eventInterval === 0 && gameState.mode !== 'normal') {
-        triggerRandomEvent(gameState);
-        if (gameState.players[gameState.turnIndex].isHuman) {
-            alert(`Event Triggered: ${gameState.activeEvent.name}\n${gameState.activeEvent.desc}`);
-        }
+        const event = triggerRandomEvent(gameState);
+        logAction(`Event: ${event.name} - ${event.desc}`);
     } else {
         gameState.activeEvent = null;
     }
 
+    await broadcastState();
+
     const nextPlayer = gameState.players[gameState.turnIndex];
     
-    if (nextPlayer.isHuman) {
-        const humanCount = gameState.players.filter(p => p.isHuman && p.isAlive).length;
-        if (humanCount > 1) {
-            showPassScreen();
+    if (!gameState.isOnline) {
+        if (nextPlayer.isHuman) {
+            const humanCount = gameState.players.filter(p => p.isHuman && p.isAlive).length;
+            if (humanCount > 1) showPassScreen();
+            else renderGame();
         } else {
             renderGame();
+            checkAITurn();
         }
     } else {
         renderGame();
@@ -415,28 +625,36 @@ function nextTurn(turns = 1) {
 function setTurnToPlayer(playerId, turns) {
     gameState.turnIndex = gameState.players.findIndex(p => p.id === playerId);
     gameState.turnsRemaining = turns;
-    renderGame();
-    checkAITurn();
+    broadcastState().then(() => {
+        renderGame();
+        checkAITurn();
+    });
 }
 
 function checkWinCondition() {
     const alive = gameState.players.filter(p => p.isAlive);
     if (alive.length === 1) {
         alert(`${alive[0].name} wins the game!`);
+        if (gameState.isOnline) Network.leaveRoom();
         location.reload();
     }
 }
 
 async function checkAITurn() {
     const player = gameState.players[gameState.turnIndex];
+    // In online mode, only the host runs AI turns
     if (!player.isHuman && player.isAlive) {
+        if (gameState.isOnline && !Network.isHost) return;
+        
         await playAITurn(player, gameState, 
             async (p, c) => {
                 const idx = p.hand.findIndex(hc => hc.id === c.id);
                 p.hand.splice(idx, 1);
                 gameState.discardPile.push(c);
+                logAction(`${p.name} played ${c.name}`);
                 renderGame();
                 await resolveCardEffect(p, c);
+                await broadcastState();
             },
             async (p) => {
                 await drawCard(p);
@@ -463,9 +681,40 @@ function showModal(title, cards) {
     });
 }
 
+function showKyogrePlacementModal(deckLength) {
+    return new Promise(resolve => {
+        ui.modalTitle.innerText = "Lapras rescued you from Kyogre!";
+        ui.modalBody.innerHTML = `
+            <p style="margin-bottom: 15px; width: 100%;">Choose where to place Kyogre back into the deck:</p>
+            <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 300px; margin: 0 auto;">
+                <button class="btn primary" id="place-top">Top of Deck</button>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label>Position (1-${deckLength}):</label>
+                    <input type="number" id="place-pos" min="1" max="${deckLength}" value="2" style="width: 60px; padding: 5px;">
+                    <button class="btn primary" id="place-custom">Place</button>
+                </div>
+                <button class="btn primary" id="place-bottom">Bottom of Deck</button>
+                <button class="btn primary" id="place-random">Random</button>
+            </div>
+        `;
+        ui.modalClose.classList.add('hidden');
+        ui.modalOverlay.classList.remove('hidden');
+        
+        document.getElementById('place-top').onclick = () => { closeModal(); resolve(0); };
+        document.getElementById('place-bottom').onclick = () => { closeModal(); resolve(deckLength); };
+        document.getElementById('place-random').onclick = () => { closeModal(); resolve(Math.floor(Math.random() * (deckLength + 1))); };
+        document.getElementById('place-custom').onclick = () => { 
+            let pos = parseInt(document.getElementById('place-pos').value) - 1;
+            if (isNaN(pos)) pos = 0;
+            closeModal(); 
+            resolve(pos); 
+        };
+    });
+}
+
 function choosePlayer(currentPlayer, title) {
     return new Promise(resolve => {
-        if (!currentPlayer.isHuman) {
+        if (!currentPlayer.isHuman || (gameState.isOnline && currentPlayer.name !== localPlayerName)) {
             resolve(aiChooseTarget(gameState.players, currentPlayer));
             return;
         }
