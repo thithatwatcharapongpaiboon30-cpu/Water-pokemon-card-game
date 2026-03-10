@@ -1,0 +1,295 @@
+:root {
+    --primary: #0077be;
+    --secondary: #00a8ff;
+    --dark: #003366;
+    --light: #e0f7fa;
+    --danger: #ff4757;
+    --success: #2ed573;
+    --shiny: #ffd700;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background: linear-gradient(135deg, #001f3f, #0077be);
+    color: white;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.screen.active {
+    display: flex;
+}
+
+.hidden {
+    display: none !important;
+}
+
+h1 {
+    font-size: 3rem;
+    text-align: center;
+    margin-bottom: 10px;
+    text-shadow: 0 4px 6px rgba(0,0,0,0.5);
+}
+
+h2 {
+    font-size: 1.5rem;
+    margin-bottom: 30px;
+    color: var(--secondary);
+}
+
+.setup-container {
+    background: rgba(0, 0, 0, 0.5);
+    padding: 30px;
+    border-radius: 15px;
+    width: 100%;
+    max-width: 400px;
+}
+
+.setup-group {
+    margin-bottom: 20px;
+}
+
+.setup-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+.setup-group select, .setup-group input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    background: var(--light);
+    color: var(--dark);
+    font-size: 1rem;
+}
+
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.btn:active {
+    transform: scale(0.95);
+}
+
+.btn.primary {
+    background: var(--secondary);
+    color: white;
+    width: 100%;
+}
+
+.btn.primary:hover {
+    background: #0097e6;
+}
+
+.btn.action {
+    background: var(--success);
+    color: white;
+    margin: 0 10px;
+}
+
+.game-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: rgba(0,0,0,0.6);
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 10;
+}
+
+.play-area {
+    display: flex;
+    gap: 40px;
+    margin-top: 80px;
+    margin-bottom: 40px;
+}
+
+.card {
+    width: 120px;
+    height: 180px;
+    background: white;
+    border-radius: 10px;
+    color: black;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: transform 0.2s;
+    position: relative;
+    border: 4px solid #ccc;
+}
+
+.card:hover {
+    transform: translateY(-10px);
+}
+
+.card.back {
+    background: repeating-linear-gradient(45deg, var(--dark), var(--dark) 10px, var(--primary) 10px, var(--primary) 20px);
+    border-color: white;
+    color: white;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.card.shiny {
+    border-color: var(--shiny);
+    box-shadow: 0 0 15px var(--shiny);
+    animation: sparkle 2s infinite;
+}
+
+@keyframes sparkle {
+    0% { box-shadow: 0 0 5px var(--shiny); }
+    50% { box-shadow: 0 0 20px var(--shiny); }
+    100% { box-shadow: 0 0 5px var(--shiny); }
+}
+
+.card-img {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+}
+
+.card-name {
+    font-size: 0.9rem;
+    font-weight: bold;
+    text-align: center;
+}
+
+.card-effect {
+    font-size: 0.7rem;
+    text-align: center;
+    color: #555;
+}
+
+.card.kyogre { border-color: var(--danger); background: #ffeaa7; }
+.card.defense { border-color: var(--success); }
+.card.action { border-color: var(--primary); }
+.card.strategy { border-color: #9c88ff; }
+.card.chaos { border-color: #e1b12c; }
+.card.ultra { border-color: #8c7ae6; }
+
+.player-hand-container {
+    width: 100%;
+    max-width: 1000px;
+    background: rgba(0,0,0,0.4);
+    padding: 20px;
+    border-radius: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.hand {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin: 20px 0;
+    min-height: 190px;
+}
+
+.players-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+    justify-content: center;
+}
+
+.status-badge {
+    background: rgba(255,255,255,0.2);
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+}
+
+.status-badge.active {
+    background: var(--secondary);
+    font-weight: bold;
+}
+
+.status-badge.dead {
+    opacity: 0.5;
+    text-decoration: line-through;
+}
+
+#modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+#modal-content {
+    background: white;
+    color: black;
+    padding: 30px;
+    border-radius: 15px;
+    max-width: 600px;
+    width: 90%;
+    text-align: center;
+}
+
+#modal-body {
+    margin: 20px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.modal-card-select {
+    cursor: pointer;
+}
+
+.modal-player-select {
+    padding: 10px;
+    background: var(--light);
+    border-radius: 8px;
+    cursor: pointer;
+    margin: 5px;
+}
+.modal-player-select:hover {
+    background: var(--secondary);
+    color: white;
+}
+
+@media (max-width: 600px) {
+    .card { width: 90px; height: 135px; }
+    .card-img { width: 50px; height: 50px; }
+    .card-name { font-size: 0.7rem; }
+    .card-effect { font-size: 0.55rem; }
+    .hand { gap: 5px; }
+}
