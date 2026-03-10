@@ -4,13 +4,6 @@ import { kv } from '@vercel/kv';
 const globalStore = globalThis.__ROOMS_STORE__ || {};
 globalThis.__ROOMS_STORE__ = globalStore;
 
-export const getRooms = async () => {
-    if (process.env.KV_REST_API_URL) {
-        return {}; // Uniqueness check fallback
-    }
-    return globalStore;
-};
-
 export const getRoom = async (code) => {
     if (process.env.KV_REST_API_URL) {
         return await kv.get(`room:${code}`);

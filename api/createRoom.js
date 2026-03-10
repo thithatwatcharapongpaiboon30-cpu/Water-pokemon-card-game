@@ -1,4 +1,4 @@
-import { getRooms, setRoom } from './store.js';
+import { getRoom, setRoom } from './store.js';
 
 function generateCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -15,9 +15,10 @@ export default async function handler(req, res) {
         if (!hostName) return res.status(400).json({ error: 'Host name required' });
 
         let code = generateCode();
-        const rooms = await getRooms();
-        while (rooms[code]) {
+        let existingRoom = await getRoom(code);
+        while (existingRoom) {
             code = generateCode();
+            existingRoom = await getRoom(code);
         }
 
         const room = {
