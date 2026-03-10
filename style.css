@@ -240,6 +240,19 @@ h2 {
     animation: sparkle 2s infinite;
 }
 
+.shiny-badge {
+    position: absolute;
+    top: -10px;
+    background: var(--shiny);
+    color: black;
+    font-size: 0.6rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    z-index: 5;
+}
+
 @keyframes sparkle {
     0% { box-shadow: 0 0 5px var(--shiny); }
     50% { box-shadow: 0 0 20px var(--shiny); }

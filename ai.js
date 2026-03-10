@@ -33,11 +33,15 @@ export async function playAITurn(player, gameState, playCardCallback, drawCardCa
             }
         } else {
             // Hard: Use attacks, skips, target strikes strategically
-            const attacks = player.hand.filter(c => c.action === 'attack' || c.action === 'skip' || c.action === 'target_strike');
-            if (attacks.length > 0 && gameState.turnsRemaining > 0) {
-                cardToPlay = attacks[0]; // Defend against attacks
+            const attacks = player.hand.filter(c => c.action === 'attack' || c.action === 'skip' || c.action === 'target_strike' || c.action === 'trap');
+            const utility = player.hand.filter(c => c.action === 'peek' || c.action === 'future_sight' || c.action === 'shuffle' || c.action === 'delivery');
+            
+            if (attacks.length > 0) {
+                cardToPlay = attacks[0];
+            } else if (utility.length > 0 && Math.random() < 0.4) {
+                cardToPlay = utility[0];
             } else if (player.hand.length > 5) {
-                const playable = player.hand.filter(c => c.type !== CardTypes.DEFENSE);
+                const playable = player.hand.filter(c => c.type !== CardTypes.DEFENSE && c.type !== CardTypes.KYOGRE);
                 if (playable.length > 0) cardToPlay = playable[0];
             }
         }

@@ -380,6 +380,7 @@ function createCardElement(card) {
     const el = document.createElement('div');
     el.className = `card ${card.type} ${card.isShiny ? 'shiny' : ''}`;
     el.innerHTML = `
+        ${card.isShiny ? '<div class="shiny-badge">✨ SHINY ✨</div>' : ''}
         <div class="card-name">${card.name}</div>
         <img src="${card.sprite}" class="card-img" alt="${card.name}">
         <div class="card-effect"><b>${card.effect}</b><br>${card.desc}</div>
@@ -426,7 +427,13 @@ async function resolveCardEffect(player, card) {
             break;
         case 'attack':
             gameState.turnsRemaining--;
-            nextTurn(2);
+            const attackTargetIdx = getNextPlayerIndex();
+            const attackTarget = gameState.players[attackTargetIdx];
+            if (await checkShield(attackTarget)) {
+                nextTurn(1);
+            } else {
+                nextTurn(2);
+            }
             break;
         case 'reverse':
             gameState.turnDirection *= -1;
@@ -447,8 +454,12 @@ async function resolveCardEffect(player, card) {
             const target = await choosePlayer(player, "Choose player to attack");
             if (target) {
                 gameState.turnsRemaining--;
-                logAction(`${player.name} targeted ${target.name} with 2 turns!`);
-                setTurnToPlayer(target.id, 2);
+                if (await checkShield(target)) {
+                    nextTurn(1);
+                } else {
+                    logAction(`${player.name} targeted ${target.name} with 2 turns!`);
+                    setTurnToPlayer(target.id, 2);
+                }
             }
             break;
         case 'steal':
@@ -495,6 +506,27 @@ async function resolveCardEffect(player, card) {
             const nextIdx = getNextPlayerIndex();
             gameState.players[nextIdx].skipNext = true;
             logAction(`${gameState.players[nextIdx].name} is trapped and will skip their turn!`);
+            break;
+        case 'delivery':
+            for (let i = 0; i < 3; i++) {
+                if (gameState.deck.length > 0) player.hand.push(gameState.deck.pop());
+            }
+            logAction(`${player.name} used Delivery! Drew 3 cards.`);
+            const giveTarget = await choosePlayer(player, "Choose player to give a card to");
+            if (giveTarget && player.hand.length > 0) {
+                const cardToGive = await chooseCardFromHand(player, "Choose card to give away");
+                if (cardToGive) {
+                    const cardIdx = player.hand.findIndex(c => c.id === cardToGive.id);
+                    giveTarget.hand.push(player.hand.splice(cardIdx, 1)[0]);
+                    logAction(`${player.name} gave ${cardToGive.name} to ${giveTarget.name}`);
+                }
+            }
+            break;
+        case 'cancel':
+            if (gameState.discardPile.length > 1) {
+                const removed = gameState.discardPile.splice(-2, 1)[0];
+                logAction(`${player.name} used Hero Mode to cancel ${removed.name}!`);
+            }
             break;
     }
 }
@@ -661,6 +693,41 @@ async function checkAITurn() {
             }
         );
     }
+}
+
+async function checkShield(target) {
+    const shieldIdx = target.hand.findIndex(c => c.action === 'shield');
+    if (shieldIdx > -1) {
+        // For simplicity in this version, we'll auto-use shield if it's an AI or if it's online
+        // In local human play, we could ask, but let's auto-use for better flow
+        const shieldCard = target.hand.splice(shieldIdx, 1)[0];
+        gameState.discardPile.push(shieldCard);
+        logAction(`${target.name} used Mantine Shield to block!`);
+        return true;
+    }
+    return false;
+}
+
+function chooseCardFromHand(player, title) {
+    return new Promise(resolve => {
+        if (!player.isHuman || (gameState.isOnline && player.name !== localPlayerName)) {
+            resolve(player.hand[0]);
+            return;
+        }
+
+        ui.modalTitle.innerText = title;
+        ui.modalBody.innerHTML = '';
+        player.hand.forEach(card => {
+            const cardEl = createCardElement(card);
+            cardEl.onclick = () => {
+                closeModal();
+                resolve(card);
+            };
+            ui.modalBody.appendChild(cardEl);
+        });
+        ui.modalClose.classList.add('hidden');
+        ui.modalOverlay.classList.remove('hidden');
+    });
 }
 
 // UI Helpers
