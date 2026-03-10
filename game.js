@@ -21,6 +21,7 @@ let gameState = {
 
 let ui = {};
 let localPlayerName = null;
+let isActionInProgress = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
     ui = {
@@ -275,6 +276,7 @@ async function leaveOnlineRoom() {
 }
 
 function syncGameState(serverRoom) {
+    if (isActionInProgress) return;
     const currentPlayer = gameState.players[gameState.turnIndex];
     if (currentPlayer && currentPlayer.name !== localPlayerName && !(!currentPlayer.isHuman && Network.isHost)) {
         Object.assign(gameState, serverRoom);
@@ -391,6 +393,7 @@ function createCardElement(card) {
 }
 
 async function handlePlayCard(player, card, index) {
+    if (isActionInProgress) return;
     if (card.type === CardTypes.DEFENSE || card.type === CardTypes.KYOGRE) {
         alert("You cannot play this card directly.");
         return;
@@ -401,16 +404,21 @@ async function handlePlayCard(player, card, index) {
         return;
     }
 
-    player.hand.splice(index, 1);
-    gameState.discardPile.push(card);
-    player.cardsPlayedThisTurn = (player.cardsPlayedThisTurn || 0) + 1;
-    
-    logAction(`${player.name} played ${card.name} (${card.effect})`);
-    
-    renderGame();
-    await resolveCardEffect(player, card);
-    await broadcastState();
-    renderGame();
+    isActionInProgress = true;
+    try {
+        player.hand.splice(index, 1);
+        gameState.discardPile.push(card);
+        player.cardsPlayedThisTurn = (player.cardsPlayedThisTurn || 0) + 1;
+        
+        logAction(`${player.name} played ${card.name} (${card.effect})`);
+        
+        renderGame();
+        await resolveCardEffect(player, card);
+        await broadcastState();
+        renderGame();
+    } finally {
+        isActionInProgress = false;
+    }
 }
 
 async function resolveCardEffect(player, card) {
@@ -425,16 +433,16 @@ async function resolveCardEffect(player, card) {
             break;
         case 'skip':
             gameState.turnsRemaining--;
-            if (gameState.turnsRemaining <= 0) nextTurn();
+            if (gameState.turnsRemaining <= 0) await nextTurn();
             break;
         case 'attack':
             gameState.turnsRemaining--;
             const attackTargetIdx = getNextPlayerIndex();
             const attackTarget = gameState.players[attackTargetIdx];
             if (await checkShield(attackTarget)) {
-                nextTurn(1);
+                await nextTurn(1);
             } else {
-                nextTurn(2);
+                await nextTurn(2);
             }
             break;
         case 'reverse':
@@ -449,7 +457,7 @@ async function resolveCardEffect(player, card) {
             if (gameState.deck.length > 0) {
                 player.hand.push(gameState.deck.shift());
                 gameState.turnsRemaining--;
-                if (gameState.turnsRemaining <= 0) nextTurn();
+                if (gameState.turnsRemaining <= 0) await nextTurn();
             }
             break;
         case 'target_strike':
@@ -457,10 +465,10 @@ async function resolveCardEffect(player, card) {
             if (target) {
                 gameState.turnsRemaining--;
                 if (await checkShield(target)) {
-                    nextTurn(1);
+                    await nextTurn(1);
                 } else {
                     logAction(`${player.name} targeted ${target.name} with 2 turns!`);
-                    setTurnToPlayer(target.id, 2);
+                    await setTurnToPlayer(target.id, 2);
                 }
             }
             break;
@@ -534,9 +542,16 @@ async function resolveCardEffect(player, card) {
 }
 
 async function handleDrawClick() {
+    if (isActionInProgress) return;
     const player = gameState.players[gameState.turnIndex];
     if (!player.isHuman || (gameState.isOnline && player.name !== localPlayerName)) return;
-    await drawCard(player);
+    
+    isActionInProgress = true;
+    try {
+        await drawCard(player);
+    } finally {
+        isActionInProgress = false;
+    }
 }
 
 async function drawCard(player) {
@@ -560,7 +575,7 @@ async function drawCard(player) {
         player.hand.push(card);
         gameState.turnsRemaining--;
         if (gameState.turnsRemaining <= 0) {
-            nextTurn();
+            await nextTurn();
         } else {
             await broadcastState();
             renderGame();
@@ -587,7 +602,7 @@ async function handleKyogre(player, kyogreCard) {
         insertCardIntoDeck(gameState.deck, kyogreCard, insertPos);
         
         gameState.turnsRemaining--;
-        if (gameState.turnsRemaining <= 0) nextTurn();
+        if (gameState.turnsRemaining <= 0) await nextTurn();
         else {
             await broadcastState();
             renderGame();
@@ -601,7 +616,7 @@ async function handleKyogre(player, kyogreCard) {
         checkWinCondition();
         if (gameState.players.filter(p=>p.isAlive).length > 1) {
             gameState.turnsRemaining = 1;
-            nextTurn();
+            await nextTurn();
         }
     }
 }
@@ -656,13 +671,12 @@ async function nextTurn(turns = 1) {
     }
 }
 
-function setTurnToPlayer(playerId, turns) {
+async function setTurnToPlayer(playerId, turns) {
     gameState.turnIndex = gameState.players.findIndex(p => p.id === playerId);
     gameState.turnsRemaining = turns;
-    broadcastState().then(() => {
-        renderGame();
-        checkAITurn();
-    });
+    await broadcastState();
+    renderGame();
+    checkAITurn();
 }
 
 function checkWinCondition() {
