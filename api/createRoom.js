@@ -7,14 +7,14 @@ function generateCode() {
     return code;
 }
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
     
     const { hostName, mode } = req.body;
     if (!hostName) return res.status(400).json({ error: 'Host name required' });
 
     let code = generateCode();
-    const rooms = getRooms();
+    const rooms = await getRooms();
     while (rooms[code]) {
         code = generateCode();
     }
@@ -36,6 +36,6 @@ export default function handler(req, res) {
         logs: []
     };
 
-    setRoom(code, room);
+    await setRoom(code, room);
     res.status(200).json({ roomCode: code, room });
 }
