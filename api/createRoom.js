@@ -42,6 +42,6 @@ export default async function handler(req, res) {
         res.status(200).json({ roomCode: code, room });
     } catch (error) {
         console.error("Error creating room:", error);
-        res.status(500).json({ error: "Failed to create room. Please check your KV environment variables if using Vercel KV." });
+        res.status(500).json({ error: error.message || "Failed to create room. Please check your KV environment variables if using Vercel KV." });
     }
 }

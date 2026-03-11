@@ -47,6 +47,6 @@ export default async function handler(req, res) {
         res.status(400).json({ error: 'Unknown action' });
     } catch (error) {
         console.error("Error updating state:", error);
-        res.status(500).json({ error: "Failed to update state. Please check your KV environment variables if using Vercel KV." });
+        res.status(500).json({ error: error.message || "Failed to update state. Please check your KV environment variables if using Vercel KV." });
     }
 }

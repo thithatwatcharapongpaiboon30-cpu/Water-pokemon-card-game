@@ -29,6 +29,6 @@ export default async function handler(req, res) {
         res.status(200).json({ room });
     } catch (error) {
         console.error("Error joining room:", error);
-        res.status(500).json({ error: "Failed to join room. Please check your KV environment variables if using Vercel KV." });
+        res.status(500).json({ error: error.message || "Failed to join room. Please check your KV environment variables if using Vercel KV." });
     }
 }

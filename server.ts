@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 
@@ -18,6 +19,13 @@ async function startServer() {
   app.all("/api/getState", getState);
   app.all("/api/updateState", updateState);
   app.all("/api/leaveRoom", leaveRoom);
+
+  app.get("/api/checkKV", (req, res) => {
+    res.json({
+      urlSet: !!process.env.KV_REST_API_URL,
+      tokenSet: !!process.env.KV_REST_API_TOKEN
+    });
+  });
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

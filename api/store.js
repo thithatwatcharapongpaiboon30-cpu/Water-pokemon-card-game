@@ -6,14 +6,24 @@ globalThis.__ROOMS_STORE__ = globalStore;
 
 export const getRoom = async (code) => {
     if (process.env.KV_REST_API_URL) {
-        return await kv.get(`room:${code}`);
+        try {
+            return await kv.get(`room:${code}`);
+        } catch (e) {
+            console.error("KV get error:", e);
+            throw new Error("Failed to connect to Vercel KV. Please check your KV_REST_API_URL and KV_REST_API_TOKEN environment variables.");
+        }
     }
     return globalStore[code];
 };
 
 export const setRoom = async (code, data) => {
     if (process.env.KV_REST_API_URL) {
-        await kv.set(`room:${code}`, data, { ex: 30 * 60 }); // 30 mins expiry
+        try {
+            await kv.set(`room:${code}`, data, { ex: 30 * 60 }); // 30 mins expiry
+        } catch (e) {
+            console.error("KV set error:", e);
+            throw new Error("Failed to connect to Vercel KV. Please check your KV_REST_API_URL and KV_REST_API_TOKEN environment variables.");
+        }
     } else {
         globalStore[code] = data;
     }
@@ -21,7 +31,12 @@ export const setRoom = async (code, data) => {
 
 export const deleteRoom = async (code) => {
     if (process.env.KV_REST_API_URL) {
-        await kv.del(`room:${code}`);
+        try {
+            await kv.del(`room:${code}`);
+        } catch (e) {
+            console.error("KV del error:", e);
+            throw new Error("Failed to connect to Vercel KV. Please check your KV_REST_API_URL and KV_REST_API_TOKEN environment variables.");
+        }
     } else {
         delete globalStore[code];
     }
