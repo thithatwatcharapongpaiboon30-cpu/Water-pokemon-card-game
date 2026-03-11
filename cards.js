@@ -54,12 +54,6 @@ export function generateDeck(playerCount, mode, pokemonList) {
         return true;
     });
 
-    // Add a few extra Lapras cards to the deck (players get their starting Lapras separately)
-    const numExtraDefuse = 2;
-    for (let i = 0; i < numExtraDefuse; i++) {
-        deck.push(createCard(CardTemplates.find(t => t.action === 'defuse'), pokemonList));
-    }
-
     // Fill the rest
     while (deck.length < numCards) {
         const template = availableTemplates[Math.floor(Math.random() * availableTemplates.length)];

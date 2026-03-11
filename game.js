@@ -252,6 +252,8 @@ async function startOnlineGame() {
     const aiCount = parseInt(document.getElementById('lobby-ai-count').value) || 0;
     const room = await Network.getState();
     
+    ui.startOnlineBtn.disabled = true;
+
     gameState.players = [...room.players];
     for (let i = 0; i < aiCount; i++) {
         gameState.players.push({
@@ -267,7 +269,16 @@ async function startOnlineGame() {
     gameState.mode = room.mode;
     setupDeckAndDeal();
     
-    await Network.updateState('START_GAME', { state: gameState });
+    try {
+        await Network.updateState('START_GAME', { state: gameState });
+        showScreen(ui.gameScreen);
+        renderGame();
+        checkAITurn();
+    } catch (e) {
+        alert("Failed to start game: " + e.message);
+        gameState.started = false;
+        ui.startOnlineBtn.disabled = false;
+    }
 }
 
 async function leaveOnlineRoom() {
@@ -301,7 +312,14 @@ function setupDeckAndDeal() {
         p.hand.push(getLaprasCard(gameState.pokemonList));
     });
 
+    // Add a few extra Lapras cards to the deck after dealing
+    const numExtraDefuse = 2;
+    for (let i = 0; i < numExtraDefuse; i++) {
+        gameState.deck.push(getLaprasCard(gameState.pokemonList));
+    }
+
     gameState.deck = insertKyogres(gameState.deck, gameState.players.length, gameState.pokemonList);
+    gameState.deck = shuffleArray(gameState.deck);
 
     gameState.turnIndex = 0;
     gameState.turnDirection = 1;
