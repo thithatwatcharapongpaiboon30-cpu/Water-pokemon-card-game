@@ -597,6 +597,7 @@ async function drawCard(player) {
         } else {
             await broadcastState();
             renderGame();
+            checkAITurn();
         }
     }
 }
@@ -624,6 +625,7 @@ async function handleKyogre(player, kyogreCard) {
         else {
             await broadcastState();
             renderGame();
+            checkAITurn();
         }
     } else {
         logAction(`${player.name} was eliminated!`);

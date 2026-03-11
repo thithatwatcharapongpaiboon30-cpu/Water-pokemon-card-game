@@ -50,6 +50,11 @@ export async function playAITurn(player, gameState, playCardCallback, drawCardCa
             await playCardCallback(player, cardToPlay);
             cardsPlayed++;
             await delay(1000);
+            
+            // If the turn has passed to someone else (e.g., played skip/attack), stop playing
+            if (gameState.players[gameState.turnIndex].id !== player.id) {
+                return;
+            }
         } else {
             break;
         }
