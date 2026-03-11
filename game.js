@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         copyCodeBtn: document.getElementById('copy-code-btn'),
         readyBtn: document.getElementById('ready-btn'),
         drawBtn: document.getElementById('draw-btn'),
+        endTurnBtn: document.getElementById('end-turn-btn'),
         
         // Game UI
         deckPile: document.getElementById('deck-pile'),
@@ -85,6 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     
     ui.drawBtn.onclick = handleDrawClick;
+    ui.endTurnBtn.onclick = handleEndTurnClick;
     ui.readyBtn.onclick = () => {
         ui.passScreen.classList.add('hidden');
         ui.gameScreen.classList.remove('hidden');
@@ -150,13 +152,9 @@ async function startLocalGame() {
 
     setupDeckAndDeal();
     
-    if (gameState.players[0].isHuman && humanPlayers > 1) {
-        showPassScreen();
-    } else {
-        showScreen(ui.gameScreen);
-        renderGame();
-        checkAITurn();
-    }
+    showScreen(ui.gameScreen);
+    renderGame();
+    checkAITurn();
 }
 
 // --- ONLINE GAME ---
@@ -331,12 +329,6 @@ function setupDeckAndDeal() {
     gameState.logs = ["Game started!"];
 }
 
-function showPassScreen() {
-    ui.gameScreen.classList.add('hidden');
-    ui.passScreen.classList.remove('hidden');
-    document.getElementById('pass-msg').innerText = `Pass device to ${gameState.players[gameState.turnIndex].name}`;
-}
-
 function renderGame() {
     const currentPlayer = gameState.players[gameState.turnIndex];
     
@@ -385,8 +377,23 @@ function renderGame() {
             ui.playerHand.appendChild(cardEl);
         });
         ui.drawBtn.disabled = !isMyTurn;
+        
+        if (isMyTurn) {
+            if (gameState.turnsRemaining > 0) {
+                ui.drawBtn.classList.remove('hidden');
+                ui.endTurnBtn.classList.add('hidden');
+            } else {
+                ui.drawBtn.classList.add('hidden');
+                ui.endTurnBtn.classList.remove('hidden');
+            }
+        } else {
+            ui.drawBtn.classList.add('hidden');
+            ui.endTurnBtn.classList.add('hidden');
+        }
     } else {
         ui.drawBtn.disabled = true;
+        ui.drawBtn.classList.add('hidden');
+        ui.endTurnBtn.classList.add('hidden');
         viewPlayer.hand.forEach(() => {
             const cardEl = document.createElement('div');
             cardEl.className = 'card back';
@@ -559,6 +566,24 @@ async function resolveCardEffect(player, card) {
     }
 }
 
+async function handleEndTurnClick() {
+    if (isActionInProgress) return;
+    const player = gameState.players[gameState.turnIndex];
+    if (!player.isHuman || (gameState.isOnline && player.name !== localPlayerName)) return;
+    
+    if (gameState.turnsRemaining > 0) {
+        alert("You must draw a card to end your turn!");
+        return;
+    }
+    
+    isActionInProgress = true;
+    try {
+        await nextTurn();
+    } finally {
+        isActionInProgress = false;
+    }
+}
+
 async function handleDrawClick() {
     if (isActionInProgress) return;
     const player = gameState.players[gameState.turnIndex];
@@ -592,13 +617,8 @@ async function drawCard(player) {
     } else {
         player.hand.push(card);
         gameState.turnsRemaining--;
-        if (gameState.turnsRemaining <= 0) {
-            await nextTurn();
-        } else {
-            await broadcastState();
-            renderGame();
-            checkAITurn();
-        }
+        await broadcastState();
+        renderGame();
     }
 }
 
@@ -621,12 +641,8 @@ async function handleKyogre(player, kyogreCard) {
         insertCardIntoDeck(gameState.deck, kyogreCard, insertPos);
         
         gameState.turnsRemaining--;
-        if (gameState.turnsRemaining <= 0) await nextTurn();
-        else {
-            await broadcastState();
-            renderGame();
-            checkAITurn();
-        }
+        await broadcastState();
+        renderGame();
     } else {
         logAction(`${player.name} was eliminated!`);
         player.isAlive = false;
@@ -676,19 +692,8 @@ async function nextTurn(turns = 1) {
 
     const nextPlayer = gameState.players[gameState.turnIndex];
     
-    if (!gameState.isOnline) {
-        if (nextPlayer.isHuman) {
-            const humanCount = gameState.players.filter(p => p.isHuman && p.isAlive).length;
-            if (humanCount > 1) showPassScreen();
-            else renderGame();
-        } else {
-            renderGame();
-            checkAITurn();
-        }
-    } else {
-        renderGame();
-        checkAITurn();
-    }
+    renderGame();
+    checkAITurn();
 }
 
 async function setTurnToPlayer(playerId, turns) {
@@ -726,6 +731,9 @@ async function checkAITurn() {
             },
             async (p) => {
                 await drawCard(p);
+            },
+            async (p) => {
+                await nextTurn();
             }
         );
     }
@@ -734,12 +742,44 @@ async function checkAITurn() {
 async function checkShield(target) {
     const shieldIdx = target.hand.findIndex(c => c.action === 'shield');
     if (shieldIdx > -1) {
-        // For simplicity in this version, we'll auto-use shield if it's an AI or if it's online
-        // In local human play, we could ask, but let's auto-use for better flow
-        const shieldCard = target.hand.splice(shieldIdx, 1)[0];
-        gameState.discardPile.push(shieldCard);
-        logAction(`${target.name} used Mantine Shield to block!`);
-        return true;
+        if (!target.isHuman || (gameState.isOnline && target.name !== localPlayerName)) {
+            // AI auto-uses shield
+            const shieldCard = target.hand.splice(shieldIdx, 1)[0];
+            gameState.discardPile.push(shieldCard);
+            logAction(`${target.name} used Mantine Shield to block!`);
+            return true;
+        } else {
+            // Prompt human
+            return new Promise(resolve => {
+                const modalOverlay = document.getElementById('modal-overlay');
+                const modalTitle = document.getElementById('modal-title');
+                const modalBody = document.getElementById('modal-body');
+                
+                modalTitle.innerText = "Incoming Attack!";
+                modalBody.innerHTML = `
+                    <p>You are being attacked! Do you want to use Mantine Shield to block?</p>
+                    <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">
+                        <button id="btn-use-shield" class="btn action">Use Shield</button>
+                        <button id="btn-take-attack" class="btn action" style="background: #e74c3c;">Take Attack</button>
+                    </div>
+                `;
+                
+                modalOverlay.classList.remove('hidden');
+                
+                document.getElementById('btn-use-shield').onclick = () => {
+                    modalOverlay.classList.add('hidden');
+                    const shieldCard = target.hand.splice(shieldIdx, 1)[0];
+                    gameState.discardPile.push(shieldCard);
+                    logAction(`${target.name} used Mantine Shield to block!`);
+                    resolve(true);
+                };
+                
+                document.getElementById('btn-take-attack').onclick = () => {
+                    modalOverlay.classList.add('hidden');
+                    resolve(false);
+                };
+            });
+        }
     }
     return false;
 }

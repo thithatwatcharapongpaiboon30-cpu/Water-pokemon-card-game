@@ -11,59 +11,78 @@ export async function playAITurn(player, gameState, playCardCallback, drawCardCa
     let cardsPlayed = 0;
     let maxCards = gameState.activeEvent?.action === 'limit_play' ? 1 : 99;
 
-    // AI Logic
-    while (cardsPlayed < maxCards) {
-        let cardToPlay = null;
+    const playCards = async () => {
+        while (cardsPlayed < maxCards) {
+            let cardToPlay = null;
 
-        if (difficulty === 'easy') {
-            // Randomly play a card 30% of the time
-            if (Math.random() < 0.3 && player.hand.length > 0) {
-                const playable = player.hand.filter(c => c.type !== CardTypes.DEFENSE && c.type !== CardTypes.KYOGRE);
-                if (playable.length > 0) {
-                    cardToPlay = playable[Math.floor(Math.random() * playable.length)];
+            if (difficulty === 'easy') {
+                // Randomly play a card 30% of the time
+                if (Math.random() < 0.3 && player.hand.length > 0) {
+                    const playable = player.hand.filter(c => c.type !== CardTypes.DEFENSE && c.type !== CardTypes.KYOGRE);
+                    if (playable.length > 0) {
+                        cardToPlay = playable[Math.floor(Math.random() * playable.length)];
+                    }
+                }
+            } else if (difficulty === 'medium') {
+                // Play action cards if hand is large, save strategy
+                if (player.hand.length > 4) {
+                    const playable = player.hand.filter(c => c.type === CardTypes.ACTION || c.type === CardTypes.CHAOS);
+                    if (playable.length > 0) {
+                        cardToPlay = playable[0];
+                    }
+                }
+            } else {
+                // Hard: Use attacks, skips, target strikes strategically
+                const attacks = player.hand.filter(c => c.action === 'attack' || c.action === 'skip' || c.action === 'target_strike' || c.action === 'trap');
+                const utility = player.hand.filter(c => c.action === 'peek' || c.action === 'future_sight' || c.action === 'shuffle' || c.action === 'delivery');
+                
+                if (attacks.length > 0) {
+                    cardToPlay = attacks[0];
+                } else if (utility.length > 0 && Math.random() < 0.4) {
+                    cardToPlay = utility[0];
+                } else if (player.hand.length > 5) {
+                    const playable = player.hand.filter(c => c.type !== CardTypes.DEFENSE && c.type !== CardTypes.KYOGRE);
+                    if (playable.length > 0) cardToPlay = playable[0];
                 }
             }
-        } else if (difficulty === 'medium') {
-            // Play action cards if hand is large, save strategy
-            if (player.hand.length > 4) {
-                const playable = player.hand.filter(c => c.type === CardTypes.ACTION || c.type === CardTypes.CHAOS);
-                if (playable.length > 0) {
-                    cardToPlay = playable[0];
+
+            if (cardToPlay) {
+                await playCardCallback(player, cardToPlay);
+                cardsPlayed++;
+                await delay(2000); // Slower pause between playing cards
+                
+                // If the turn has passed to someone else (e.g., played skip/attack), stop playing
+                if (gameState.players[gameState.turnIndex].id !== player.id) {
+                    return false;
                 }
-            }
-        } else {
-            // Hard: Use attacks, skips, target strikes strategically
-            const attacks = player.hand.filter(c => c.action === 'attack' || c.action === 'skip' || c.action === 'target_strike' || c.action === 'trap');
-            const utility = player.hand.filter(c => c.action === 'peek' || c.action === 'future_sight' || c.action === 'shuffle' || c.action === 'delivery');
-            
-            if (attacks.length > 0) {
-                cardToPlay = attacks[0];
-            } else if (utility.length > 0 && Math.random() < 0.4) {
-                cardToPlay = utility[0];
-            } else if (player.hand.length > 5) {
-                const playable = player.hand.filter(c => c.type !== CardTypes.DEFENSE && c.type !== CardTypes.KYOGRE);
-                if (playable.length > 0) cardToPlay = playable[0];
+            } else {
+                break;
             }
         }
+        return true;
+    };
 
-        if (cardToPlay) {
-            await playCardCallback(player, cardToPlay);
-            cardsPlayed++;
-            await delay(2000); // Slower pause between playing cards
-            
-            // If the turn has passed to someone else (e.g., played skip/attack), stop playing
-            if (gameState.players[gameState.turnIndex].id !== player.id) {
-                return;
-            }
-        } else {
-            break;
-        }
-    }
+    let stillMyTurn = await playCards();
+    if (!stillMyTurn) return;
 
-    // Draw card to end turn
-    if (player.isAlive) {
+    // Draw card(s) until turnsRemaining is 0
+    while (gameState.turnsRemaining > 0 && player.isAlive) {
         await delay(1500); // Pause before drawing a card so it doesn't happen instantly
         await drawCardCallback(player);
+        
+        if (gameState.players[gameState.turnIndex].id !== player.id) {
+            return; // e.g. Kyogre killed them or defused and turn passed
+        }
+        
+        // Maybe play more cards after drawing
+        stillMyTurn = await playCards();
+        if (!stillMyTurn) return;
+    }
+
+    // End turn
+    if (player.isAlive && gameState.players[gameState.turnIndex].id === player.id) {
+        await delay(1000);
+        await endTurnCallback(player);
     }
 }
 
