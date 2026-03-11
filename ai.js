@@ -4,7 +4,7 @@ export async function playAITurn(player, gameState, playCardCallback, drawCardCa
     if (!player.isAlive) return;
 
     const delay = (ms) => new Promise(res => setTimeout(res, ms));
-    await delay(1000); // Thinking pause
+    await delay(2500); // Thinking pause - increased to make AI feel more deliberate
 
     const difficulty = gameState.mode === 'normal' ? 'easy' : (gameState.mode === 'chaos' ? 'medium' : 'hard');
 
@@ -49,7 +49,7 @@ export async function playAITurn(player, gameState, playCardCallback, drawCardCa
         if (cardToPlay) {
             await playCardCallback(player, cardToPlay);
             cardsPlayed++;
-            await delay(1000);
+            await delay(2000); // Slower pause between playing cards
             
             // If the turn has passed to someone else (e.g., played skip/attack), stop playing
             if (gameState.players[gameState.turnIndex].id !== player.id) {
@@ -62,6 +62,7 @@ export async function playAITurn(player, gameState, playCardCallback, drawCardCa
 
     // Draw card to end turn
     if (player.isAlive) {
+        await delay(1500); // Pause before drawing a card so it doesn't happen instantly
         await drawCardCallback(player);
     }
 }
