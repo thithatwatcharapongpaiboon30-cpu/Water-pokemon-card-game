@@ -431,16 +431,28 @@ async function handlePlayCard(player, card, index) {
 
     isActionInProgress = true;
     try {
-        player.hand.splice(index, 1);
-        gameState.discardPile.push(card);
+        const actualIndex = player.hand.findIndex(c => c.id === card.id);
+        if (actualIndex > -1) {
+            player.hand.splice(actualIndex, 1);
+            gameState.discardPile.push(card);
+        } else {
+            return;
+        }
+        
         player.cardsPlayedThisTurn = (player.cardsPlayedThisTurn || 0) + 1;
         
         logAction(`${player.name} played ${card.name} (${card.effect})`);
         
         renderGame();
         await resolveCardEffect(player, card);
-        await broadcastState();
-        renderGame();
+        
+        if (!player.isAlive && gameState.players[gameState.turnIndex].id === player.id) {
+            gameState.turnsRemaining = 1;
+            await nextTurn();
+        } else {
+            await broadcastState();
+            renderGame();
+        }
     } finally {
         isActionInProgress = false;
     }
@@ -480,9 +492,7 @@ async function resolveCardEffect(player, card) {
             break;
         case 'bottom_draw':
             if (gameState.deck.length > 0) {
-                player.hand.push(gameState.deck.shift());
-                gameState.turnsRemaining--;
-                if (gameState.turnsRemaining <= 0) await nextTurn();
+                await drawCard(player, true, true);
             }
             break;
         case 'target_strike':
@@ -515,10 +525,12 @@ async function resolveCardEffect(player, card) {
             }
             break;
         case 'tsunami':
-            gameState.players.forEach(p => {
-                if (p.isAlive && gameState.deck.length > 0) p.hand.push(gameState.deck.pop());
-            });
-            logAction("Tsunami! Everyone drew a card.");
+            logAction("Tsunami! Everyone draws a card.");
+            for (let p of [...gameState.players]) {
+                if (p.isAlive && gameState.deck.length > 0) {
+                    await drawCard(p, false, false);
+                }
+            }
             break;
         case 'swap_hands':
             const swapTarget = await choosePlayer(player, "Choose player to swap hands with");
@@ -543,24 +555,22 @@ async function resolveCardEffect(player, card) {
             logAction(`${gameState.players[nextIdx].name} is trapped and will skip their turn!`);
             break;
         case 'delivery':
+            logAction(`${player.name} used Delivery! Drawing 3 cards.`);
             for (let i = 0; i < 3; i++) {
-                if (gameState.deck.length > 0) player.hand.push(gameState.deck.pop());
-            }
-            logAction(`${player.name} used Delivery! Drew 3 cards.`);
-            const giveTarget = await choosePlayer(player, "Choose player to give a card to");
-            if (giveTarget && player.hand.length > 0) {
-                const cardToGive = await chooseCardFromHand(player, "Choose card to give away");
-                if (cardToGive) {
-                    const cardIdx = player.hand.findIndex(c => c.id === cardToGive.id);
-                    giveTarget.hand.push(player.hand.splice(cardIdx, 1)[0]);
-                    logAction(`${player.name} gave ${cardToGive.name} to ${giveTarget.name}`);
+                if (gameState.deck.length > 0 && player.isAlive) {
+                    await drawCard(player, false, false);
                 }
             }
-            break;
-        case 'cancel':
-            if (gameState.discardPile.length > 1) {
-                const removed = gameState.discardPile.splice(-2, 1)[0];
-                logAction(`${player.name} used Hero Mode to cancel ${removed.name}!`);
+            if (player.isAlive) {
+                const giveTarget = await choosePlayer(player, "Choose player to give a card to");
+                if (giveTarget && player.hand.length > 0) {
+                    const cardToGive = await chooseCardFromHand(player, "Choose card to give away");
+                    if (cardToGive) {
+                        const cardIdx = player.hand.findIndex(c => c.id === cardToGive.id);
+                        giveTarget.hand.push(player.hand.splice(cardIdx, 1)[0]);
+                        logAction(`${player.name} gave ${cardToGive.name} to ${giveTarget.name}`);
+                    }
+                }
             }
             break;
     }
@@ -597,7 +607,7 @@ async function handleDrawClick() {
     }
 }
 
-async function drawCard(player) {
+async function drawCard(player, fromBottom = false, isTurnAction = true) {
     if (gameState.deck.length === 0) {
         if (gameState.discardPile.length > 0) {
             gameState.deck = shuffleArray([...gameState.discardPile]);
@@ -609,20 +619,22 @@ async function drawCard(player) {
         }
     }
 
-    const card = gameState.deck.pop();
+    const card = fromBottom ? gameState.deck.shift() : gameState.deck.pop();
     logAction(`${player.name} drew a card.`);
     
     if (card.type === CardTypes.KYOGRE) {
-        await handleKyogre(player, card);
+        await handleKyogre(player, card, isTurnAction);
     } else {
         player.hand.push(card);
-        gameState.turnsRemaining--;
+        if (isTurnAction) {
+            gameState.turnsRemaining--;
+        }
         await broadcastState();
         renderGame();
     }
 }
 
-async function handleKyogre(player, kyogreCard) {
+async function handleKyogre(player, kyogreCard, isTurnAction = true) {
     logAction(`${player.name} drew Kyogre Catastrophe!`);
     
     const defuseIndex = player.hand.findIndex(c => c.action === 'defuse');
@@ -640,7 +652,9 @@ async function handleKyogre(player, kyogreCard) {
         
         insertCardIntoDeck(gameState.deck, kyogreCard, insertPos);
         
-        gameState.turnsRemaining--;
+        if (isTurnAction) {
+            gameState.turnsRemaining--;
+        }
         await broadcastState();
         renderGame();
     } else {
@@ -651,8 +665,13 @@ async function handleKyogre(player, kyogreCard) {
         
         checkWinCondition();
         if (gameState.players.filter(p=>p.isAlive).length > 1) {
-            gameState.turnsRemaining = 1;
-            await nextTurn();
+            if (isTurnAction) {
+                gameState.turnsRemaining = 1;
+                await nextTurn();
+            } else {
+                await broadcastState();
+                renderGame();
+            }
         }
     }
 }
@@ -727,7 +746,12 @@ async function checkAITurn() {
                 logAction(`${p.name} played ${c.name}`);
                 renderGame();
                 await resolveCardEffect(p, c);
-                await broadcastState();
+                if (!p.isAlive && gameState.players[gameState.turnIndex].id === p.id) {
+                    gameState.turnsRemaining = 1;
+                    await nextTurn();
+                } else {
+                    await broadcastState();
+                }
             },
             async (p) => {
                 await drawCard(p);

@@ -32,7 +32,6 @@ const CardTemplates = [
     { name: "Wailord", effect: "Tsunami", desc: "All players draw 1 card.", type: CardTypes.CHAOS, action: 'tsunami' },
     { name: "Wishiwashi", effect: "School", desc: "Swap hands with random player.", type: CardTypes.CHAOS, action: 'swap_hands' },
     { name: "Magikarp", effect: "Disaster", desc: "Discard entire hand.", type: CardTypes.CHAOS, action: 'discard_hand' },
-    { name: "Palafin", effect: "Hero Mode", desc: "Cancel an effect.", type: CardTypes.CHAOS, action: 'cancel' },
     
     // Ultra
     { name: "Pelipper", effect: "Delivery", desc: "Draw 3 cards then give 1 away.", type: CardTypes.ULTRA, action: 'delivery' },
@@ -111,7 +110,8 @@ export function insertCardIntoDeck(deck, card, position) {
 
 function createCard(template, pokemonList) {
     // Find matching pokemon or random water pokemon
-    let pData = pokemonList.find(p => p.name.toLowerCase() === template.name.toLowerCase());
+    let searchName = template.name.toLowerCase();
+    let pData = pokemonList.find(p => p.name.toLowerCase() === searchName || p.name.toLowerCase().startsWith(searchName + '-'));
     if (!pData) pData = pokemonList[Math.floor(Math.random() * pokemonList.length)];
     
     return {
