@@ -5,7 +5,7 @@ export const ChaosEvents = [
     { name: "Ocean Current", desc: "Next player order shifts randomly.", action: "shift_order" }
 ];
 
-export function triggerRandomEvent(gameState) {
+export async function triggerRandomEvent(gameState, drawCardCallback) {
     const event = ChaosEvents[Math.floor(Math.random() * ChaosEvents.length)];
     gameState.activeEvent = event;
     
@@ -13,11 +13,11 @@ export function triggerRandomEvent(gameState) {
     if (event.action === "reverse_order") {
         gameState.turnDirection *= -1;
     } else if (event.action === "everyone_draw") {
-        gameState.players.forEach(p => {
+        for (let p of gameState.players) {
             if (p.isAlive && gameState.deck.length > 0) {
-                p.hand.push(gameState.deck.pop());
+                await drawCardCallback(p, false, false);
             }
-        });
+        }
     } else if (event.action === "shift_order") {
         gameState.turnIndex = Math.floor(Math.random() * gameState.players.length);
         while(!gameState.players[gameState.turnIndex].isAlive) {

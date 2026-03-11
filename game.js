@@ -65,6 +65,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalTitle: document.getElementById('modal-title'),
         modalBody: document.getElementById('modal-body'),
         modalClose: document.getElementById('modal-close'),
+        endScreen: document.getElementById('end-screen'),
+        endTitle: document.getElementById('end-title'),
+        endMsg: document.getElementById('end-msg'),
+        replayBtn: document.getElementById('replay-btn'),
     };
 
     // Navigation
@@ -94,6 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         checkAITurn();
     };
     ui.modalClose.onclick = closeModal;
+    ui.replayBtn.onclick = () => location.reload();
 
     // Preload Pokemon
     gameState.pokemonList = await fetchWaterPokemon();
@@ -626,10 +631,8 @@ async function drawCard(player, fromBottom = false, isTurnAction = true) {
     if (!card) return;
     
     logAction(`${player.name} drew a card.`);
-    console.log(`DEBUG: ${player.name} drew ${card.name} (type: ${card.type})`);
     
     if (card.type === CardTypes.KYOGRE) {
-        console.log(`DEBUG: Calling handleKyogre for ${player.name}`);
         await handleKyogre(player, card, isTurnAction);
     } else {
         player.hand.push(card);
@@ -643,7 +646,6 @@ async function drawCard(player, fromBottom = false, isTurnAction = true) {
 
 async function handleKyogre(player, kyogreCard, isTurnAction = true) {
     logAction(`${player.name} drew Kyogre Catastrophe!`);
-    console.log(`DEBUG: handleKyogre called for ${player.name}. Hand:`, player.hand);
     
     const defuseIndex = player.hand.findIndex(c => c.action === 'defuse');
     if (defuseIndex > -1) {
@@ -709,7 +711,7 @@ async function nextTurn(turns = 1) {
 
     const eventInterval = gameState.mode === 'chaos' ? 5 : (gameState.mode === 'ultra' ? 3 : 999);
     if (gameState.turnCount % eventInterval === 0 && gameState.mode !== 'normal') {
-        const event = triggerRandomEvent(gameState);
+        const event = await triggerRandomEvent(gameState, drawCard);
         logAction(`Event: ${event.name} - ${event.desc}`);
     } else {
         gameState.activeEvent = null;
@@ -734,9 +736,10 @@ async function setTurnToPlayer(playerId, turns) {
 function checkWinCondition() {
     const alive = gameState.players.filter(p => p.isAlive);
     if (alive.length === 1) {
-        alert(`${alive[0].name} wins the game!`);
+        ui.endTitle.innerText = "Game Over!";
+        ui.endMsg.innerText = `${alive[0].name} wins the game!`;
+        showScreen(ui.endScreen);
         if (gameState.isOnline) Network.leaveRoom();
-        location.reload();
     }
 }
 
