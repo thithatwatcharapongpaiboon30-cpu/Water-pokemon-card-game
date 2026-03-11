@@ -493,6 +493,9 @@ async function resolveCardEffect(player, card) {
         case 'bottom_draw':
             if (gameState.deck.length > 0) {
                 await drawCard(player, true, true);
+                if (player.isAlive && gameState.turnsRemaining <= 0) {
+                    await nextTurn();
+                }
             }
             break;
         case 'target_strike':
@@ -620,9 +623,13 @@ async function drawCard(player, fromBottom = false, isTurnAction = true) {
     }
 
     const card = fromBottom ? gameState.deck.shift() : gameState.deck.pop();
+    if (!card) return;
+    
     logAction(`${player.name} drew a card.`);
+    console.log(`DEBUG: ${player.name} drew ${card.name} (type: ${card.type})`);
     
     if (card.type === CardTypes.KYOGRE) {
+        console.log(`DEBUG: Calling handleKyogre for ${player.name}`);
         await handleKyogre(player, card, isTurnAction);
     } else {
         player.hand.push(card);
@@ -636,6 +643,7 @@ async function drawCard(player, fromBottom = false, isTurnAction = true) {
 
 async function handleKyogre(player, kyogreCard, isTurnAction = true) {
     logAction(`${player.name} drew Kyogre Catastrophe!`);
+    console.log(`DEBUG: handleKyogre called for ${player.name}. Hand:`, player.hand);
     
     const defuseIndex = player.hand.findIndex(c => c.action === 'defuse');
     if (defuseIndex > -1) {
