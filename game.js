@@ -319,14 +319,14 @@ function setupDeckAndDeal() {
     gameState.deck = insertKyogres(gameState.deck, gameState.players.length, gameState.pokemonList);
     gameState.deck = shuffleArray(gameState.deck);
 
-    gameState.turnIndex = 0;
+    gameState.turnIndex = Math.floor(Math.random() * gameState.players.length);
     gameState.turnDirection = 1;
     gameState.turnsRemaining = 1;
     gameState.turnCount = 0;
     gameState.activeEvent = null;
     gameState.discardPile = [];
     gameState.started = true;
-    gameState.logs = ["Game started!"];
+    gameState.logs = [`Game started! ${gameState.players[gameState.turnIndex].name} goes first.`];
 }
 
 function renderGame() {
